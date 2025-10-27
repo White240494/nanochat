@@ -39,12 +39,14 @@
   </div>
   <script>
     // API того же домена (Nginx проксирует на /chat/completions)
-    const API_UR= '';
-    const chat = document.getElementById('chat');
-    const txt =document.getElementById('txt');
-    const sendBtn = document.getElementById('send');
-    let busy = false;
-    let messages = [];
+    cconst API_URL = 'https://nanochat.karpathy.ai';
+const chat = document.getElementById('chat');
+const txt = document.getElementById('txt');
+const sendBtn = document.getElementById('send');
+let busy = false;
+let messages = [];
+
+    
 
     const add = (role, content, klass='')=>{
       const line = document.createElement('div');
