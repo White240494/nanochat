@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>NanoChat RU</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif; background:#fff; color:#111827; min-height:100dvh; margin:0; display:flex; flex-direction:column; }
+    .header { background:#fff; padding:1rem 1.25rem; display:flex; align-items:center; gap:.75rem; }
+    .header h1 { margin:0; font-size:1.1rem; font-weight:600; }
+    .chat-container { flex:1; overflow-y:auto; }
+    .chat-wrapper { max-width:48rem; margin:0 auto; padding:1.25rem; display:flex; flex-direction:column; gap:.5rem; }
+    .message { display:flex; }
+    .message.user { justify-content:flex-end; }
+    .message .bubble { white-space:pre-wrap; line-height:1.6; max-width:80%; border-radius:1rem; padding:.7rem .9rem; }
+    .message.user .bubble { background:#f3f4f6; }
+    .message.assistant .bubble { background:transparent; }
+    .input { padding:1rem; padding-bottom:calc(1rem + env(safe-area-inset-bottom)); background:#fff; }
+    .input-wrap { max-width:48rem; margin:0 auto; display:flex; gap:.75rem; align-items:flex-end; }
+    textarea { flex:1; padding:.8rem 1rem; border:1px solid #d1d5db; border-radius:.75rem; min-height:54px; max-height:200px; resize:none; outline:none; }
+    textarea:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+    button.send { width:54px; height:54px; border:1px solid #111827; background:#111827; color:#fff; border-radius:.75rem; }
+    .console { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:.9rem; background:#fafafa; color:#374151; border-radius:.6rem; padding:.6rem .8rem; }
+    .typing { color:#6b7280; letter-spacing:.15em; }
+    .error { background:#fee2e2; border:1px solid #fecaca; color:#b91c1c; padding:.75rem 1rem; border-radius:.75rem; }
+  </style>
+</head>
+<body>
+  <div class="header"><h1>NanoChat RU</h1></div>
+  <div class="chat-container"><div id="chat" class="chat-wrapper"></div></div>
+  <div class="input">
+    <div class="input-wrap">
+      <textarea id="txt" rows="1" placeholder="Задайте вопрос по-русски"></textarea>
+      <button class="send" id="send">➤</button>
+    </div>
+  </div>
+  <script>
+    // API того же домена (Nginx проксирует на /chat/completions)
+    const API_URL = '';
+    const chat = document.getElementById('chat');
+    const txt = document.getElementById('txt');
+    const sendBtn = document.getElementById('send');
+    let busy = false;
+    let messages = [];
+
+    const add = (role, content, klass='')=>{
+      const line = document.createElement('div');
+      line.className = `message ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${klass}`;
+      bubble.textContent = content;
+      line.appendChild(bubble);
+      chat.appendChild(line);
+      chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
+      return bubble;
+    };
+
+    const cmd = (text) => {
+      const parts = text.trim().split(/\s+/);
+      if (parts[0] === '/clear') { chat.innerHTML=''; messages=[]; txt.value=''; return true; }
+      if (parts[0] === '/temperature' && parts[1]) { window._temp = Math.max(0, Math.min(2, parseFloat(parts[1]))); add('console', `Температура: ${window._temp}`, 'console'); return true; }
+      if (parts[0] === '/topk' && parts[1]) { window._topk = Math.max(1, Math.min(200, parseInt(parts[1]))); add('console', `top-k: ${window._topk}`, 'console'); return true; }
+      return false;
+    };
+
+    const send = async ()=>{
+      if (busy) return;
+      const text = txt.value.trim();
+      if (!text) return;
+      if (text.startsWith('/')) { if (cmd(text)) { txt.value=''; return; } }
+      txt.value=''; txt.style.height='auto';
+      const idx = messages.length;
+      messages.push({role:'user', content:text});
+      add('user', text);
+
+      busy = true;
+      const bubble = add('assistant', '…', 'typing');
+
+      try {
+        const res = await fetch(`${API_URL}/chat/completions`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            messages,
+            temperature: window._temp ?? 0.8,
+            top_k: window._topk ?? 50,
+            max_tokens: 512
+          })
+        });
+        if (!res.ok || !res.body) throw new Error('HTTP '+res.status);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let out = '';
+        bubble.textContent = '';
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          for (const line of chunk.split('\n')) {
+            if (line.startsWith('data: ')) {
+              try {
+                const obj = JSON.parse(line.slice(6));
+                if (obj.token) {
+                  out += obj.token;
+                  bubble.textContent = out;
+                  chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
+                }
+              } catch {}
+            }
+          }
+        }
+        messages.push({role:'assistant', content: out});
+      } catch (e) {
+        bubble.textContent = '';
+        add('assistant', `Ошибка: ${e.message}`, 'error');
+      } finally {
+        busy = false;
+      }
+    };
+
+    sendBtn.onclick = send;
+    txt.oninput = function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,200)+'px'; };
+    txt.addEventListener('keydown', e=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
+    // Проверяем API
+    fetch('/health').then(r=>r.json()).then(j=>console.log('API', j)).catch(()=>add('assistant','API не запущен','error'));
+  </script>
+</body>
+</html>
