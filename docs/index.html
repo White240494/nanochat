@@ -37,9 +37,9 @@
       <button class="send" id="send">➤</button>
     </div>
   </div>
-  <script>
+  script>
     // API того же домена (Nginx проксирует на /chat/completions)
-    cconst API_URL = 'https://nanochat.karpathy.ai';
+    const API_URL = 'https://nanochat.karpathy.ai';
 const chat = document.getElementById('chat');
 const txt = document.getElementById('txt');
 const sendBtn = document.getElementById('send');
@@ -131,7 +131,7 @@ let messages = [];
     txt.oninput = function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,200)+'px'; };
     txt.addEventListener('keydown', e=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
     // Проверяем API
-    fetch('/health').then(r=>r.json()).then(j=>console.log('API', j)).catch(()=>add('assistant','API не запущен','error'));
+  fetch(`${API_URL}/health`).then(r=>r.json()).then(j=>console.log('API', j)).catch(()=>add('assistant','API не запущен','error'))
   </script>
 </body>
 </html>
