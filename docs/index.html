@@ -33,14 +33,15 @@
   <div class="input">
     <div class="input-wrap">
       <textarea id="txt" rows="1" placeholder="Задайте вопрос по-русски"></textarea>
+ 
       <button class="send" id="send">➤</button>
     </div>
   </div>
   <script>
     // API того же домена (Nginx проксирует на /chat/completions)
-    const API_URL = '';
+    const API_UR= '';
     const chat = document.getElementById('chat');
-    const txt = document.getElementById('txt');
+    const txt =document.getElementById('txt');
     const sendBtn = document.getElementById('send');
     let busy = false;
     let messages = [];
@@ -110,7 +111,8 @@
                   bubble.textContent = out;
                   chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
                 }
-              } catch {}
+              } 
+              catch {}
             }
           }
         }
